@@ -9,13 +9,20 @@ type
 var connections  = newSeq[User]()
 
 proc broadcastIf(text:string,fn:proc(id:string):bool ) {.async} = 
+  var clientsToRemove: seq[int] = @[]
   for i,user in connections:
     if user.ws.readyState == Open:
       if fn(user.id):
         asyncCheck user.ws.send(text)
     else:
-      user.ws.hangup()
-      del(connections,i)
+      try:
+        user.ws.hangup()
+      except: 
+        echo user.id," offline \r\n"
+      finally:
+        clientsToRemove.add(i)
+  for index in clientsToRemove:
+    connections.delete(index)
 
 proc getInitData():string = 
   var ids =  newSeq[string]()
@@ -38,23 +45,39 @@ proc getOnlineData(id:string):string =
 
 proc handle(req:Request,id:string) {.async} = 
   let ws = await newWebSocket(req)
-  connections.add(User(ws:ws,id:id))
   await ws.send(getInitData())
   proc others(tid:string):bool = 
     return tid!=id
   await broadcastIf(getOnlineData(id),others)
+  connections.add(User(ws:ws,id:id))
   while ws.readyState == Open:
-    let packet = await ws.receiveStrPacket()
-    let data= parseJson(packet)
-    let to = data["to"].getStr()
-    if to!="":
-      proc touser(tid:string):bool=
-        return tid==to
-      await broadcastIf(packet,touser)
+    var packet:string
+    var data :JsonNode
+    try:
+      packet = await ws.receiveStrPacket()
+    except Exception:
+      break
+    try:
+      data= parseJson(packet)
+    except:
+      continue
+    if data.kind == JObject and data.hasKey("to"):
+      let to = data["to"].getStr()
+      if to!="":
+        proc touser(tid:string):bool=
+          return tid==to
+        await broadcastIf(packet,touser)
+  var clientsToRemove: seq[int] = @[]
   for i,user in connections:
     if user.ws.readyState != Open:
-      user.ws.hangup()
-      del(connections,i)
+      try:
+        user.ws.hangup()
+      except: 
+        echo user.id," offline \r\n"
+      finally:
+        clientsToRemove.add(i)
+  for index in clientsToRemove:
+    connections.delete(index)
     
 
 
