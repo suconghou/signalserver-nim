@@ -19,7 +19,8 @@ proc broadcastIf(text:string,fn:proc(id:string):bool ) {.async} =
 proc getInitData():string = 
   var ids =  newSeq[string]()
   for user in connections:
-    ids.add(user.id)
+    if user.id notin ids:
+      ids.add(user.id)
   let data = %*{
         "event": "init",
         "ids": ids,
@@ -49,6 +50,9 @@ proc handle(req:Request,id:string) {.async} =
       proc touser(tid:string):bool=
         return tid==to
       await broadcastIf(packet,touser)
+  for i,user in connections:
+    if user.ws.readyState != Open:
+      del(connections,i)
     
 
 
