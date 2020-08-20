@@ -14,6 +14,7 @@ proc broadcastIf(text:string,fn:proc(id:string):bool ) {.async} =
       if fn(user.id):
         asyncCheck user.ws.send(text)
     else:
+      user.ws.hangup()
       del(connections,i)
 
 proc getInitData():string = 
@@ -52,6 +53,7 @@ proc handle(req:Request,id:string) {.async} =
       await broadcastIf(packet,touser)
   for i,user in connections:
     if user.ws.readyState != Open:
+      user.ws.hangup()
       del(connections,i)
     
 
