@@ -8,20 +8,20 @@ type
 
 var connections = newSeq[User]()
 
-proc range(fn:proc(u:User):Future[bool]) {.async} =
+proc range(fn:proc(u:User):bool) =
   var alive = newSeq[User]()
+  var change = false
   for i,user in connections:
     let t = fn(user)
-    yield t
-    if t.failed:
-      continue
+    if t:
+      alive.add(user)
     else:
-      if t.read:
-        alive.add(user)
-  connections = alive
+      change = true
+  if change:
+    connections = alive
   
 
-proc isOnLine(u :User):Future[bool] {.async.} = 
+proc isOnLine(u :User):bool  = 
   if u.ws.readyState != Open:
     try:
       u.ws.hangup()
@@ -32,7 +32,7 @@ proc isOnLine(u :User):Future[bool] {.async.} =
 
 
 proc broadcastIf(text:string,fn:proc(id:string):bool ) {.async} = 
-  proc each(u:User): Future[bool] {.async} =
+  proc each(u:User): bool  =
     if u.ws.readyState != Open:
       return false
     let ok = fn(u.id)
@@ -47,7 +47,7 @@ proc broadcastIf(text:string,fn:proc(id:string):bool ) {.async} =
         finally:
           return false
     return true
-  await range(each)
+  range(each)
 
 
 proc getInitData():string = 
@@ -101,7 +101,7 @@ proc handle(req:Request,id:string) {.async, gcsafe.} =
         proc touser(tid:string):bool=
           return tid==to
         await broadcastIf(packet,touser)
-  await range(isOnLine)
+  range(isOnLine)
 
 
 
