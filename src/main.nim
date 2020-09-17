@@ -19,25 +19,19 @@ proc range(fn:proc(u:User):Future[bool]) {.async} =
     connections.del(i)
   
 
-proc isOnLine(u :User):Future[bool] = 
+proc isOnLine(u :User):Future[bool] {.async.} = 
   if u.ws.readyState != Open:
     try:
       u.ws.hangup()
     finally:
-      var retFuture = newFuture[bool]()
-      retFuture.complete(false)
-      return retFuture
-  var retFuture = newFuture[bool]()
-  retFuture.complete(true)
-  return retFuture
+      return false
+  return true
 
 
 proc broadcastIf(text:string,fn:proc(id:string):bool ) {.async} = 
-  proc each(u:User): Future[bool] =
+  proc each(u:User): Future[bool] {.async} =
     if u.ws.readyState != Open:
-      var retFuture = newFuture[bool]()
-      retFuture.complete(false)
-      return retFuture
+      return false
     let ok = fn(u.id)
     if ok:
       try:
@@ -46,12 +40,8 @@ proc broadcastIf(text:string,fn:proc(id:string):bool ) {.async} =
         try:
           u.ws.hangup()
         finally:
-          var retFuture = newFuture[bool]()
-          retFuture.complete(false)
-          return retFuture
-    var retFuture = newFuture[bool]()
-    retFuture.complete(true)
-    return retFuture
+          return false
+    return true
   await range(each)
 
 
