@@ -13,3 +13,5 @@ nim --gc:regions -d:release --passL:-static --opt:size c main && strip -s main
 ```
 
 
+`len(a) == L` the length of the seq changed while iterating over it
+

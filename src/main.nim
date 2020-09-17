@@ -1,28 +1,59 @@
 import ws,json,strutils, asyncdispatch, asynchttpserver
 
 type 
-  User = ref object 
+  User = ref object
     ws*: Websocket
-    id*:string 
+    id*: string 
 
 
-var connections  = newSeq[User]()
+var connections = newSeq[User]()
+
+proc range(fn:proc(u:User):Future[bool]) {.async} =
+  var r  = newSeq[int]()
+  for i,user in connections:
+    let t = fn(user)
+    yield t
+    if t.failed:
+      r.add(i)
+  for i in r:
+    connections.del(i)
+  
+
+proc isOnLine(u :User):Future[bool] = 
+  if u.ws.readyState != Open:
+    try:
+      u.ws.hangup()
+    finally:
+      var retFuture = newFuture[bool]()
+      retFuture.complete(false)
+      return retFuture
+  var retFuture = newFuture[bool]()
+  retFuture.complete(true)
+  return retFuture
+
 
 proc broadcastIf(text:string,fn:proc(id:string):bool ) {.async} = 
-  var clientsToRemove: seq[int] = @[]
-  for i,user in connections:
-    if user.ws.readyState == Open:
-      if fn(user.id):
-        asyncCheck user.ws.send(text)
-    else:
+  proc each(u:User): Future[bool] =
+    if u.ws.readyState != Open:
+      var retFuture = newFuture[bool]()
+      retFuture.complete(false)
+      return retFuture
+    let ok = fn(u.id)
+    if ok:
       try:
-        user.ws.hangup()
-      except: 
-        echo user.id," offline \r\n"
-      finally:
-        clientsToRemove.add(i)
-  for index in clientsToRemove:
-    connections.delete(index)
+        asyncCheck u.ws.send(text)
+      except:
+        try:
+          u.ws.hangup()
+        finally:
+          var retFuture = newFuture[bool]()
+          retFuture.complete(false)
+          return retFuture
+    var retFuture = newFuture[bool]()
+    retFuture.complete(true)
+    return retFuture
+  await range(each)
+
 
 proc getInitData():string = 
   var ids =  newSeq[string]()
@@ -43,9 +74,15 @@ proc getOnlineData(id:string):string =
   }
   return $data
 
-proc handle(req:Request,id:string) {.async} = 
+proc handle(req:Request,id:string) {.async, gcsafe.} = 
   let ws = await newWebSocket(req)
-  await ws.send(getInitData())
+  let r= ws.send(getInitData())
+  yield r
+  if r.failed:
+    try:
+      ws.hangup()
+    finally:
+      return
   proc others(tid:string):bool = 
     return tid!=id
   await broadcastIf(getOnlineData(id),others)
@@ -67,17 +104,9 @@ proc handle(req:Request,id:string) {.async} =
         proc touser(tid:string):bool=
           return tid==to
         await broadcastIf(packet,touser)
-  var clientsToRemove: seq[int] = @[]
-  for i,user in connections:
-    if user.ws.readyState != Open:
-      try:
-        user.ws.hangup()
-      except: 
-        echo user.id," offline \r\n"
-      finally:
-        clientsToRemove.add(i)
-  for index in clientsToRemove:
-    connections.delete(index)
+  
+  await range(isOnLine)
+
     
 
 
