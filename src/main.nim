@@ -84,9 +84,9 @@ proc handle(req:Request,id:string) {.async, gcsafe.} =
     return tid!=id
   await broadcastIf(getOnlineData(id),others)
   connections.add(User(ws:ws,id:id))
+  var packet:string
+  var data :JsonNode
   while ws.readyState == Open:
-    var packet:string
-    var data :JsonNode
     try:
       packet = await ws.receiveStrPacket()
     except Exception:
