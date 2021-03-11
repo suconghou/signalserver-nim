@@ -1,9 +1,13 @@
-import ws,json,strutils, asyncdispatch, asynchttpserver
+import ws,json,strutils,parseopt, asyncdispatch, asynchttpserver
 
 type 
   User = ref object
     ws*: Websocket
     id*: string 
+
+
+type Config* = object
+    port*: uint
 
 
 var connections = newSeq[User]()
@@ -103,17 +107,34 @@ proc handle(req:Request,id:string) {.async, gcsafe.} =
         await broadcastIf(packet,touser)
   range(isOnLine)
 
-
+proc getConfig(): Config =
+  var cfg = Config( port: 9001,)
+  let err = "invalid argument"
+  for kind, key, val in getopt():
+      case kind
+      of cmdArgument:
+          assert(false,err);
+      of cmdLongOption, cmdShortOption:
+          case key
+          of "port", "p": cfg.port = parseUint(val)
+      of cmdEnd: assert(false,err)
+  return cfg
+  
 
 proc cb(req: Request) {.async, gcsafe.} =
   try:
     let arr = req.url.path.split("/uid/")
-    if len(arr)==2 and len(arr[1])==36:
-        await handle(req,arr[1])
-        return
+    if len(arr)==2:
+        if len(arr[1])==36:
+          await handle(req,arr[1])
+          return
+        elif arr[1] == "status" :
+          await req.respond(Http200, getInitData())
+          return
     await req.respond(Http200, "Hello World")
   except Exception:
     echo "error:", getCurrentExceptionMsg()
 
+let cfg = getConfig()
 let server = newAsyncHttpServer()
-waitFor server.serve(Port(9001), cb)
+waitFor server.serve(Port(cfg.port), cb)
