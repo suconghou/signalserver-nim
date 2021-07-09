@@ -28,10 +28,11 @@ proc range(fn:proc(u:User):bool) =
 proc isOnLine(u :User):bool  = 
   if u.ws.readyState != Open:
     try:
-      u.ws.hangup()
+      u.ws.close()
     except:
       discard
     return false
+  discard u.ws.ping()
   return true
 
 
@@ -45,7 +46,7 @@ proc broadcastIf(text:string,fn:proc(id:string):bool ) {.async} =
         discard u.ws.send(text)
       except:
         try:
-          u.ws.hangup()
+          u.ws.close()
         except:
           discard
         finally:
@@ -79,7 +80,7 @@ proc handle(req:Request,id:string) {.async, gcsafe.} =
   yield r
   if r.failed:
     try:
-      ws.hangup()
+      ws.close()
     except:
       discard
     finally:
