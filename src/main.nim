@@ -32,7 +32,12 @@ proc isOnLine(u :User):bool  =
     except:
       discard
     return false
-  discard u.ws.ping()
+  proc check() {.async.} =
+    try:
+      await u.ws.ping()
+    except:
+      u.ws.close()
+  asyncCheck check()
   return true
 
 
@@ -43,7 +48,7 @@ proc broadcastIf(text:string,fn:proc(id:string):bool ) {.async} =
     let ok = fn(u.id)
     if ok:
       try:
-        discard u.ws.send(text)
+        asyncCheck u.ws.send(text)
       except:
         try:
           u.ws.close()
