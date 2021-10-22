@@ -15,5 +15,5 @@ ws 库为 https://github.com/treeform/ws
 `docker pull nimlang/nim:alpine`
 
 ```
-nim -d:release --passL:-static --opt:size c main && strip -s main
+nim -d:release --passC:-flto --passL:-flto --passL:-s --passL:-static --opt:size c main
 ```
