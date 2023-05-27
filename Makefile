@@ -4,9 +4,5 @@ build:
 
 release:
 	cd src && \
-	nim c -d:release main.nim
-
-ssl:
-	cd src && \
-	nim c -d:ssl -d:release main.nim
+	nim -d:release --mm:orc --threads:off c main
 

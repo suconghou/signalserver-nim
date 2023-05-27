@@ -10,7 +10,7 @@ type Config* = object
   port*: uint
 
 
-var connections = newSeq[User]()
+var connections {.threadvar.}: seq[User]
 
 proc range(fn: proc(u: User): bool) =
   var alive = newSeq[User]()
@@ -29,19 +29,19 @@ proc isOnLine(u: User): bool =
   if u.ws.readyState != Open:
     try:
       u.ws.close()
-    except:
+    except CatchableError:
       discard
     return false
   proc check() {.async.} =
     try:
       await u.ws.ping()
-    except:
+    except CatchableError:
       u.ws.close()
   asyncCheck check()
   return true
 
 
-proc broadcastIf(text: string, fn: proc(id: string): bool) {.async.} =
+proc broadcastIf(text: string, fn: proc(id: string): bool {.noSideEffect.}) {.async.} =
   proc each(u: User): bool =
     if u.ws.readyState != Open:
       return false
@@ -49,10 +49,10 @@ proc broadcastIf(text: string, fn: proc(id: string): bool) {.async.} =
     if ok:
       try:
         asyncCheck u.ws.send(text)
-      except:
+      except CatchableError:
         try:
           u.ws.close()
-        except:
+        except CatchableError:
           discard
         finally:
           return false
@@ -72,25 +72,25 @@ proc getInitData(): string =
   return $data
 
 
-proc getOnlineData(id: string): string =
+func getOnlineData(id: string): string =
   let data = %*{
     "event": "online",
     "id": id,
   }
   return $data
 
-proc handle(req: Request, id: string) {.async, gcsafe.} =
+proc handle(req: Request, id: string) {.async.} =
   let ws = await newWebSocket(req)
   let r = ws.send(getInitData())
   yield r
   if r.failed:
     try:
       ws.close()
-    except:
+    except CatchableError:
       discard
     finally:
       return
-  proc others(tid: string): bool =
+  func others(tid: string): bool =
     return tid != id
   await broadcastIf(getOnlineData(id), others)
   connections.add(User(ws: ws, id: id))
@@ -99,16 +99,16 @@ proc handle(req: Request, id: string) {.async, gcsafe.} =
   while ws.readyState == Open:
     try:
       packet = await ws.receiveStrPacket()
-    except Exception:
+    except CatchableError:
       break
     try:
       data = parseJson(packet)
-    except:
+    except CatchableError:
       continue
     if data.kind == JObject and data.hasKey("to"):
       let to = data["to"].getStr()
       if to != "":
-        proc touser(tid: string): bool =
+        func touser(tid: string): bool =
           return tid == to
         await broadcastIf(packet, touser)
   range(isOnLine)
@@ -138,9 +138,10 @@ proc cb(req: Request) {.async, gcsafe.} =
         await req.respond(Http200, getInitData())
         return
     await req.respond(Http200, "Hello World")
-  except Exception:
+  except CatchableError:
     echo "error:", getCurrentExceptionMsg()
 
+connections = newSeq[User]()
 let cfg = getConfig()
 let server = newAsyncHttpServer()
 waitFor server.serve(Port(cfg.port), cb)
