@@ -17,5 +17,5 @@ ws 库为 https://github.com/treeform/ws
 需要关闭多线程
 
 ```
-nim -d:release --passC:-flto --passL:-flto --passL:-s --passL:-static --mm:orc --threads:off c main
+nim -d:release --passL:-s --passL:-static --mm:orc --threads:off c main
 ```

@@ -127,7 +127,7 @@ proc getConfig(): Config =
   return cfg
 
 
-proc cb(req: Request) {.async, gcsafe.} =
+proc cb(req: Request) {.async.} =
   try:
     let arr = req.url.path.split("/uid/")
     if len(arr) == 2:
