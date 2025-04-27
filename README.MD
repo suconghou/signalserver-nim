@@ -12,10 +12,10 @@ ws 库为 https://github.com/treeform/ws
 
 静态编译
 
-`docker pull nimlang/nim:latest-alpine-slim`
+`nimlang/nim`容器内编译
 
 需要关闭多线程
 
 ```
-nim -d:release --passL:-s --passL:-static --mm:orc --threads:off c main
+nim --mm:orc --threads:off --passC:-flto --passL:-flto -d:release --passL:-s --passL:-static --opt:speed c main
 ```
